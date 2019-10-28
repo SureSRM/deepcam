@@ -1,0 +1,124 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title></title>
+    <meta content="">
+    <style></style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.0.1"> </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@1.0.0"> </script>
+  </head>
+  <body>
+  
+    <video id='video'></video>
+    <canvas id='output'></canvas>
+
+    <script>
+
+    navigator.getUserMedia = navigator.getUserMedia ||
+        navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    
+    
+    let videoWidth;
+    let videoHeight;
+    
+    
+    function isAndroid() {
+        return /Android/i.test(navigator.userAgent);
+    }
+
+    function isiOS() {
+        return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    function isMobile() {
+        return isAndroid() || isiOS();
+    }
+    
+    async function setupCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error(
+                'Browser API navigator.mediaDevices.getUserMedia not available');
+        }
+        
+        
+
+        const mobile = isMobile();
+        const stream = await navigator.mediaDevices.getUserMedia({
+            'audio': false,
+            'video': {
+                facingMode: 'user',
+                width: 1280, // Ideal
+                height: 720, // Ideal
+            },
+        });
+        
+        
+        settings = stream.getTracks()[0].getSettings()
+        videoWidth = settings.width;
+        videoHeight = settings.height;
+        
+        const video = document.getElementById('video');
+        video.width = videoWidth;
+        video.height = videoHeight;
+        video.srcObject = stream;
+            
+        return new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+            resolve(video);
+            };
+        });
+    }
+    
+    function realTimeVideo(video, model) {
+        const canvas = document.getElementById('output');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+            
+        async function detectFrame(){
+            predictions = await model.estimatePersonSegmentation(video)
+            drawFrame(video, predictions)
+            
+            requestAnimationFrame(detectFrame);
+        }
+
+        async function drawFrame(video, predictions){
+            bodyPix.drawBokehEffect(canvas, video, predictions, 8, 3, true)
+            return
+            console.log('Predictions: ', predictions);
+            ctx.clearRect(0, 0, videoWidth, videoHeight);
+            ctx.save();
+            ctx.drawImage(video, 0, 0);
+            predictions.map((prediction)=>{
+                ctx.beginPath();
+                ctx.rect(...prediction.bbox)
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'green';
+                ctx.fillStyle = 'green';
+                ctx.stroke();
+            })
+            ctx.restore();
+        }
+        detectFrame()
+    }
+    
+    async function loadVideo() {
+        const video = await setupCamera();
+        video.play();
+
+        return video;
+    }
+    
+    async function run() {
+        const model = await bodyPix.load(0.75)
+        const video = await loadVideo()
+        realTimeVideo(video, model)
+    }
+    
+    run();
+
+    </script>
+  
+  </body>
+</html>
